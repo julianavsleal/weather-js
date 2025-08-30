@@ -1,5 +1,3 @@
-
-
 function getWeatherDescription(code) {
   const weatherMap = {
     0: { text: "Céu limpo", icon: "☀️" },
@@ -24,57 +22,83 @@ function getWeatherDescription(code) {
     96: { text: "Trovoada com granizo leve", icon: "🌩️" },
     99: { text: "Trovoada com granizo forte", icon: "🌩️" }
   };
-
   return weatherMap[code] || { text: "Clima desconhecido", icon: "❓" };
 }
 
 if (typeof fetch === "undefined") {
   global.fetch = require("node-fetch");
 }
- async function getWeatherByCity(cityName) {
+
+const GEO_API = "https://geocoding-api.open-meteo.com/v1/search";
+const WEATHER_API = "https://api.open-meteo.com/v1/forecast";
+
+async function getWeatherByCity(cityName) {
   try {
     if (!cityName || cityName.trim() === "") {
-      throw new Error("O nome da cidade não pode estar vazio.");
+      return { erro: "Por favor, informe um nome de cidade válido." };
     }
 
     // Geocodificação
-    const geoResponse = await fetch(
-      `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(cityName)}&count=1`
+    const responseGeo = await fetch(
+      `${GEO_API}?name=${encodeURIComponent(cityName)}&count=1&language=pt`
     );
+    if (!responseGeo.ok) throw new Error("Erro ao buscar coordenadas.");
 
-    if (!geoResponse.ok) throw new Error("Falha ao buscar coordenadas da cidade.");
-    const geoData = await geoResponse.json();
-
-    if (!geoData.results || geoData.results.length === 0) {
-      throw new Error("Cidade não encontrada.");
+    const geoData = await responseGeo.json();
+    if (!geoData.results?.length) {
+      return { erro: "Cidade não encontrada." };
     }
 
     const { latitude, longitude, name, country } = geoData.results[0];
 
     // Clima
-    const weatherResponse = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${latitude}&longitude=${longitude}&current_weather=true`
+    const responseWeather = await fetch(
+      `${WEATHER_API}?latitude=${latitude}&longitude=${longitude}&current_weather=true`
     );
+    if (!responseWeather.ok) throw new Error("Erro ao buscar dados do clima.");
 
-    if (!weatherResponse.ok) throw new Error("Falha ao buscar dados do clima.");
-    const weatherData = await weatherResponse.json();
+    const weatherData = await responseWeather.json();
+    if (!weatherData.current_weather) {
+      return { erro: "Dados do clima não disponíveis." };
+    }
 
-    if (!weatherData.current_weather) throw new Error("Dados do clima não disponíveis.");
-
-    const { temperature, windspeed, winddirection, weathercode } = weatherData.current_weather;
+    const { temperature, windspeed, winddirection, weathercode, time } =
+      weatherData.current_weather;
 
     // Pegar descrição e ícone
     const { text, icon } = getWeatherDescription(weathercode);
 
     return {
       cidade: `${name}, ${country}`,
-      temperatura: temperature,
+      temperatura: `${temperature}°C`,
       descricao: `${text} ${icon}`,
-      vento: `Vento ${windspeed} km/h, direção ${winddirection}°`
+      vento: `${windspeed} km/h, direção ${winddirection}°`,
+      atualizado_em: time
     };
-
-  } catch (error) {
-    return { erro: error.message };
+  } catch (err) {
+    return { erro: `Falha inesperada: ${err.message}` };
   }
 }
-export { getWeatherByCity };
+
+/**
+ * Obtém o clima de múltiplas cidades em paralelo.
+ *
+ * @param {string[]} cities - Lista de nomes de cidades.
+ * @returns {Promise<Object[]>} Lista com os resultados de cada cidade.
+ */
+async function getWeatherForCities(cities) {
+  if (!Array.isArray(cities) || cities.length === 0) {
+    throw new Error("É necessário fornecer uma lista de cidades.");
+  }
+
+  const results = await Promise.all(
+    cities.map(async (city) => {
+      const data = await getWeatherByCity(city);
+      return { cidade_consultada: city, ...data };
+    })
+  );
+
+  return results;
+}
+
+export { getWeatherByCity, getWeatherForCities };
