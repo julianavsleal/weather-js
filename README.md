@@ -17,6 +17,18 @@ O projeto também inclui **tratamento de erros**, como para entradas inválidas 
 
 ---
 
+## 💻 Tecnologias Utilizadas
+
+- **HTML5** 
+- **CSS3** 
+- **JavaScript** 
+- **Node.js** 
+- **Jest** 
+- **node-fetch** 
+- **Open-Meteo API** 
+
+---
+
 ## ⚙️ Instalação
 
 Clone o repositório e entre na pasta do projeto:
